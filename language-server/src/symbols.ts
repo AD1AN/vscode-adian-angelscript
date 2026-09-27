@@ -680,42 +680,52 @@ function GetHoverForLocalVariable(scope : scriptfiles.ASScope, asvar : scriptfil
     }};
 }
 
-function GetHoverForProperty(type : typedb.DBType | typedb.DBNamespace, prop : typedb.DBProperty) : Hover
-{
-    let prefix = null;
-    if(type instanceof typedb.DBNamespace)
-    {
-        if (!type.isRootNamespace())
-            prefix = type.getQualifiedNamespace()+"::";
+function GetHoverForProperty(type: typedb.DBType | typedb.DBNamespace, prop: typedb.DBProperty): Hover | undefined {
+    let hover = "";
+    let prefix = "";
+    if (prop.containingType != type)
+        prefix = prop.containingType.name + "::";
+
+    hover += FormatPropertyDocumentation(prop.documentation);
+
+    if (prop.isUProperty) {
+        let specifiers = Array<string>();
+
+        if (prop.macroSpecifiers) {
+            for (let [name, value] of prop.macroSpecifiers) {
+                if (value)
+                    specifiers.push(name + "=" + value);
+                else
+                    specifiers.push(name);
+            }
+        }
+
+        hover += "```\nUPROPERTY(" + specifiers.join(", ") + ")\n```\n";
     }
 
-    let hover = "";
-    hover += FormatPropertyDocumentation(prop.documentation);
-    hover += "```angelscript_snippet\n"+prop.format(prefix)+"\n```";
+    hover += "```angelscript_snippet\n" + prop.format(prefix) + "\n```";
 
-    return <Hover> {contents: <MarkupContent> {
-        kind: "markdown",
-        value: hover,
-    }};
+    return <Hover>{
+        contents: <MarkupContent>{
+            kind: "markdown",
+            value: hover,
+        },
+    };
 }
 
-function GetHoverForFunction(asmodule : scriptfiles.ASModule, offset : number, type : typedb.DBType | typedb.DBNamespace, func : typedb.DBMethod, isAccessor : boolean) : Hover
-{
+function GetHoverForFunction(asmodule: scriptfiles.ASModule, offset: number, type: typedb.DBType | typedb.DBNamespace, func: typedb.DBMethod, isAccessor: boolean): Hover {
     let prefix = "";
     let suffix = "";
-    if (func.isMixin && func.args && func.args.length != 0)
-    {
-        prefix = func.args[0].typename+".";
+    if (func.isMixin && func.args && func.args.length != 0) {
+        prefix = func.args[0].typename + ".";
         suffix = " mixin";
     }
-    else if (type instanceof typedb.DBNamespace)
-    {
+    else if (type instanceof typedb.DBNamespace) {
         if (!type.isRootNamespace())
-            prefix = type.getQualifiedNamespace()+"::";
+            prefix = type.getQualifiedNamespace() + "::";
     }
-    else
-    {
-        prefix = type.name+".";
+    else {
+        prefix = type.name + ".";
     }
 
     let hover = "";
@@ -724,26 +734,47 @@ function GetHoverForFunction(asmodule : scriptfiles.ASModule, offset : number, t
     if (doc)
         hover += FormatFunctionDocumentation(doc, func);
 
-    let determineType : typedb.DBType = null;
+    let determineType: typedb.DBType = null;
     if (func.determinesOutputTypeArgumentIndex != -1)
         determineType = parsedcompletion.GetDetermineTypeFromArguments(asmodule, offset, func.determinesOutputTypeArgumentIndex);
 
-    if (isAccessor)
-    {
-        if (func.name.startsWith("Get"))
-            hover += "```angelscript_snippet\n"+func.returnType+" "+prefix+func.name.substring(3)+"\n```";
-        else if (func.args && func.args.length > 0)
-            hover += "```angelscript_snippet\n"+func.args[0].typename+" "+prefix+func.name.substring(3)+"\n```";
-    }
-    else
-    {
-        hover += "```angelscript_snippet\n"+func.format(prefix, func.isMixin, false, null, determineType)+suffix+"\n```";
+    if (func.isUFunction) {
+        let specifiers = Array<string>();
+
+        if (func.macroSpecifiers) {
+            for (let [name, value] of func.macroSpecifiers) {
+                if (value)
+                    specifiers.push(name + "=" + value);
+                else
+                    specifiers.push(name);
+            }
+        }
+
+        hover += "```\nUFUNCTION(" + specifiers.join(", ") + ")\n```\n";
     }
 
-    return <Hover> {contents: <MarkupContent> {
-        kind: "markdown",
-        value: hover,
-    }};
+    let access = "";
+    if (func.isPrivate)
+        access = "private ";
+    else if (func.isProtected)
+        access = "protected ";
+
+    if (isAccessor) {
+        if (func.name.startsWith("Get"))
+            hover += "```angelscript_snippet\n" + access + func.returnType + " " + prefix + func.name.substring(3) + "\n```";
+        else if (func.args && func.args.length > 0)
+            hover += "```angelscript_snippet\n" + access + func.args[0].typename + " " + prefix + func.name.substring(3) + "\n```";
+    }
+    else {
+        hover += "```angelscript_snippet\n" + access + func.format(prefix, func.isMixin, false, null, determineType) + suffix + "\n```";
+    }
+
+    return <Hover>{
+        contents: <MarkupContent>{
+            kind: "markdown",
+            value: hover,
+        }
+    };
 }
 
 export function DocumentSymbols(asmodule : scriptfiles.ASModule) : DocumentSymbol[]

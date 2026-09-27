@@ -1,5 +1,5 @@
 {
-    "name": "unreal-angelscript",
+    "name": "adian-angelscript",
     "displayName": "Unreal Angelscript",
     "description": "Language Server and Debug Adapter for use with the UnrealEngine-Angelscript plugin from https://github.com/Hazelight/UnrealEngine-Angelscript",
     "version": "1.9.4",
@@ -18,7 +18,7 @@
     ],
     "repository": {
         "type": "git",
-        "url": "https://github.com/Hazelight/vscode-unreal-angelscript"
+        "url": "https://github.com/Hazelight/vscode-adian-angelscript"
     },
     "main": "./extension/dist/extension.js",
     "contributes": {
@@ -689,5 +689,8 @@
         "postinstall": "cd extension && npm install && cd ../language-server && npm install && cd ..",
         "pegjs:compile": "cd language-server/pegjs && peggy angelscript.pegjs --allowed-start-rules start,start_global,start_class,start_enum",
         "pegjs:test": "cd language-server/pegjs && peggy angelscript.pegjs --allowed-start-rules start,start_global,start_class,start_enum --trace --test-file test.as -S start"
+    },
+    "devDependencies": {
+        "npm-run-all": "^4.1.5"
     }
 }

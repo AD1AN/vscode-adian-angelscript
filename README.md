@@ -9,7 +9,7 @@ function.
 
 ## Features
 ### Editor Connection
-The unreal-angelscript extension automatically makes a connection to the
+The adian-angelscript extension automatically makes a connection to the
 running Unreal Editor instance for most of its functionality. If the editor
 is not running, certain features will not be available.
 
