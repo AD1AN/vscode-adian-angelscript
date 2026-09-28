@@ -60,12 +60,7 @@ export function GetInlayHintsForRange(asmodule : scriptfiles.ASModule, range : R
 
 export function GetInlayHintsForScope(scope : scriptfiles.ASScope, start_offset : number, end_offset : number, hints : Array<InlayHint>)
 {
-    AddReplicatedPropertyDeclarationHints(
-        scope,
-        start_offset,
-        end_offset,
-        hints
-    );
+    AddReplicatedPropertyDeclarationHints(scope, start_offset, end_offset, hints);
 
     // Check all statements that are within the range
     for (let statement of scope.statements)
@@ -77,6 +72,7 @@ export function GetInlayHintsForScope(scope : scriptfiles.ASScope, start_offset 
         if (statement.end_offset < start_offset)
             continue;
 
+        AddAuthorityOnlyDeclarationHint(scope, statement, hints);
         GetInlayHintsForNode(scope, statement, statement.ast, hints);
     }
 
@@ -379,6 +375,8 @@ export function GetInlayHintsForNode(scope : scriptfiles.ASScope, statement : sc
                 if (node.children[0])
                     GetInlayHintsForNode(scope, statement, node.children[0], hints);
 
+                AddAuthorityOnlyHint(scope, statement, node, hints);
+
                 if (!node.children[1])
                     return;
 
@@ -606,9 +604,7 @@ function AddReplicatedPropertyHint(
         && !prop.macroSpecifiers.has("ReplicatedUsing"))
         return;
 
-    let symbol = prop.macroSpecifiers.has("ReplicatedUsing")
-        ? "🔂"
-        : "🔁";
+    let symbol = prop.macroSpecifiers.has("ReplicatedUsing") ? "🔁" : "➡️";
 
     hints.push(<InlayHint>{
         label: symbol,
@@ -653,7 +649,7 @@ function AddReplicatedPropertyDeclarationHints(
                 continue;
 
             hints.push(<InlayHint>{
-                label: isReplicatedUsing ? "🔂" : "🔁",
+                label: isReplicatedUsing ? "🔁" : "➡️",
                 position: scope.module.getPosition(variable.end_offset_name),
                 kind: InlayHintKind.Type,
                 paddingLeft: true,
@@ -663,4 +659,86 @@ function AddReplicatedPropertyDeclarationHints(
             });
         }
     }
+}
+
+function AddAuthorityOnlyHint(
+    scope: scriptfiles.ASScope,
+    statement: scriptfiles.ASStatement,
+    node: any,
+    hints: Array<InlayHint>) {
+
+    if (!node || node.type != node_types.FunctionCall && node.type != node_types.ConstructorCall)
+        return;
+
+    let calleeNode = node.children[0];
+    if (!calleeNode)
+        return;
+
+    let overloads = new Array<typedb.DBMethod>();
+    scriptfiles.ResolveFunctionOverloadsFromExpression(scope, calleeNode, overloads);
+    if (overloads.length == 0)
+        return;
+
+    let anyAuthorityOnly = false;
+    for (let func of overloads) {
+        if (func.macroSpecifiers && func.macroSpecifiers.has("BlueprintAuthorityOnly")) {
+            anyAuthorityOnly = true;
+            break;
+        }
+    }
+    if (!anyAuthorityOnly)
+        return;
+
+    hints.push(<InlayHint>{
+        label: "🔒",
+        position: scope.module.getPosition(statement.start_offset + node.end),
+        kind: InlayHintKind.Type,
+        paddingLeft: false,
+        tooltip: "BlueprintAuthorityOnly — only executes on the authority (server)",
+    });
+}
+
+function AddAuthorityOnlyDeclarationHint(
+    scope: scriptfiles.ASScope,
+    statement: scriptfiles.ASStatement,
+    hints: Array<InlayHint>) {
+
+    let node = statement.ast;
+    if (!node || node.type != node_types.FunctionDecl || !node.name)
+        return;
+
+    let name = node.name.value;
+    let dbFunc: typedb.DBMethod = null;
+
+    let parentType = scope.getParentType();
+    if (parentType) {
+        let sym = parentType.findFirstSymbol(name, typedb.DBAllowSymbol.Functions);
+        if (sym instanceof typedb.DBMethod)
+            dbFunc = sym;
+    }
+    else {
+        let ns = scope.getNamespace();
+        if (ns) {
+            let syms = ns.findSymbols(name, typedb.DBAllowSymbol.Functions);
+            for (let sym of syms) {
+                if (sym instanceof typedb.DBMethod) {
+                    dbFunc = sym;
+                    break;
+                }
+            }
+        }
+    }
+
+    if (!dbFunc || !dbFunc.macroSpecifiers)
+        return;
+    if (!dbFunc.macroSpecifiers.has("BlueprintAuthorityOnly"))
+        return;
+
+    hints.push(<InlayHint>{
+        label: "🔒",
+        position: scope.module.getPosition(statement.start_offset + node.end),
+        kind: InlayHintKind.Type,
+        paddingLeft: false,
+        tooltip: "BlueprintAuthorityOnly — only executes on the authority (server)",
+    });
 }
