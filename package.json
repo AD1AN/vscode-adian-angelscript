@@ -1,9 +1,9 @@
 {
     "name": "adian-angelscript",
-    "displayName": "Unreal Angelscript",
+    "displayName": "ADIAN Angelscript",
     "description": "Language Server and Debug Adapter for use with the UnrealEngine-Angelscript plugin from https://github.com/Hazelight/UnrealEngine-Angelscript",
     "version": "1.9.4",
-    "publisher": "Hazelight",
+    "publisher": "ADIAN",
     "icon": "resources/angelscript_unreal.png",
     "engines": {
         "vscode": "^1.65.0"
