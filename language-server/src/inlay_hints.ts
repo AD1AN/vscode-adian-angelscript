@@ -60,6 +60,13 @@ export function GetInlayHintsForRange(asmodule : scriptfiles.ASModule, range : R
 
 export function GetInlayHintsForScope(scope : scriptfiles.ASScope, start_offset : number, end_offset : number, hints : Array<InlayHint>)
 {
+    AddReplicatedPropertyDeclarationHints(
+        scope,
+        start_offset,
+        end_offset,
+        hints
+    );
+
     // Check all statements that are within the range
     for (let statement of scope.statements)
     {
@@ -334,6 +341,12 @@ export function GetInlayHintsForNode(scope : scriptfiles.ASScope, statement : sc
     // Add symbols for parameters in function declarations
     switch (node.type)
     {
+        case node_types.Identifier:
+        {
+            AddReplicatedPropertyHint(scope, statement, node, hints);
+        }
+        break;
+
         case node_types.FunctionCall:
         case node_types.ConstructorCall:
         case node_types.VariableDecl:
@@ -502,7 +515,8 @@ export function GetInlayHintsForNode(scope : scriptfiles.ASScope, statement : sc
         break;
         case node_types.MemberAccess:
         {
-            GetInlayHintsForNode(scope, statement, node.children[0], hints);
+                GetInlayHintsForNode(scope, statement, node.children[0], hints);
+                GetInlayHintsForNode(scope, statement, node.children[1], hints);
         }
         break;
         case node_types.ArgumentList:
@@ -549,5 +563,107 @@ export function GetInlayHintsForNode(scope : scriptfiles.ASScope, statement : sc
             GetInlayHintsForNode(scope, statement, node.children[2], hints);
         }
         break;
+    }
+}
+
+function IsReplicatedProperty(prop: typedb.DBProperty): boolean {
+    if (!prop.isUProperty || !prop.macroSpecifiers)
+        return false;
+
+    return prop.macroSpecifiers.has("Replicated") || prop.macroSpecifiers.has("ReplicatedUsing");
+}
+
+function AddReplicatedPropertyHint(
+    scope: scriptfiles.ASScope,
+    statement: scriptfiles.ASStatement,
+    node: any,
+    hints: Array<InlayHint>) {
+    if (!node || node.type != node_types.Identifier)
+        return;
+
+    let offset = statement.start_offset + node.start;
+
+    let findSymbol = scope.module.getSymbolAt(offset);
+    if (!findSymbol)
+        return;
+
+    if (findSymbol.type != scriptfiles.ASSymbolType.MemberVariable)
+        return;
+
+    let insideType = typedb.GetTypeByName(findSymbol.container_type);
+    if (!insideType)
+        return;
+
+    let prop = insideType.findFirstSymbol(
+        findSymbol.symbol_name,
+        typedb.DBAllowSymbol.Properties
+    );
+
+    if (!(prop instanceof typedb.DBProperty))
+        return;
+
+    if (!prop.isUProperty || !prop.macroSpecifiers)
+        return;
+
+    if (!prop.macroSpecifiers.has("Replicated")
+        && !prop.macroSpecifiers.has("ReplicatedUsing"))
+        return;
+
+    let symbol = prop.macroSpecifiers.has("ReplicatedUsing")
+        ? "🔂"
+        : "🔁";
+
+    hints.push(<InlayHint>{
+        label: symbol,
+        position: scope.module.getPosition(statement.start_offset + node.end),
+        kind: InlayHintKind.Type,
+        tooltip: prop.macroSpecifiers.has("ReplicatedUsing")
+            ? "ReplicatedUsing property"
+            : "Replicated property",
+    });
+}
+
+function AddReplicatedPropertyDeclarationHints(
+    scope: scriptfiles.ASScope,
+    start_offset: number,
+    end_offset: number,
+    hints: Array<InlayHint>) {
+    let parentType = scope.getParentType();
+    if (scope.dbtype) {
+        for (let variable of scope.variables) {
+            if (!variable.isMember)
+                continue;
+
+            if (variable.start_offset_name < start_offset
+                || variable.start_offset_name > end_offset)
+                continue;
+
+            let prop = scope.dbtype.findFirstSymbol(
+                variable.name,
+                typedb.DBAllowSymbol.Properties
+            );
+
+            if (!(prop instanceof typedb.DBProperty))
+                continue;
+
+            if (!prop.isUProperty || !prop.macroSpecifiers)
+                continue;
+
+            let isReplicated = prop.macroSpecifiers.has("Replicated");
+            let isReplicatedUsing = prop.macroSpecifiers.has("ReplicatedUsing");
+
+            if (!isReplicated && !isReplicatedUsing)
+                continue;
+
+            hints.push(<InlayHint>{
+                label: isReplicatedUsing ? "🔂" : "🔁",
+                position: scope.module.getPosition(variable.end_offset_name),
+                kind: InlayHintKind.Type,
+                paddingLeft: true,
+                tooltip: isReplicatedUsing
+                    ? "ReplicatedUsing property"
+                    : "Replicated property",
+            });
+        }
     }
 }
