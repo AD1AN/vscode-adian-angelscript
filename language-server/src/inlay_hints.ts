@@ -375,6 +375,10 @@ export function GetInlayHintsForNode(scope : scriptfiles.ASScope, statement : sc
             else
             {
                 scriptfiles.ResolveFunctionOverloadsFromExpression(scope, node.children[0], overloads);
+
+                if (node.children[0])
+                    GetInlayHintsForNode(scope, statement, node.children[0], hints);
+
                 if (!node.children[1])
                     return;
 
@@ -564,13 +568,6 @@ export function GetInlayHintsForNode(scope : scriptfiles.ASScope, statement : sc
         }
         break;
     }
-}
-
-function IsReplicatedProperty(prop: typedb.DBProperty): boolean {
-    if (!prop.isUProperty || !prop.macroSpecifiers)
-        return false;
-
-    return prop.macroSpecifiers.has("Replicated") || prop.macroSpecifiers.has("ReplicatedUsing");
 }
 
 function AddReplicatedPropertyHint(
