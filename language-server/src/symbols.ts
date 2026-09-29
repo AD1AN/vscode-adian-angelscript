@@ -703,7 +703,19 @@ function GetHoverForProperty(type: typedb.DBType | typedb.DBNamespace, prop: typ
         hover += "```\nUPROPERTY(" + specifiers.join(", ") + ")\n```\n";
     }
 
-    hover += "```angelscript_snippet\n" + prop.format(prefix) + "\n```";
+    let declaration = prop.format(prefix);
+
+    // Try to show declaration initialization if the property is declared in a script file
+    if (prop.declaredModule && prop.moduleOffset >= 0) {
+        let propModule = scriptfiles.GetModule(prop.declaredModule);
+        if (propModule && propModule.loaded) {
+            let initializer = GetPropertyInitializer(propModule, prop.moduleOffset, prop.name);
+            if (initializer)
+                declaration += " = " + initializer;
+        }
+    }
+
+    hover += "```angelscript_snippet\n" + declaration + "\n```";
 
     return <Hover>{
         contents: <MarkupContent>{
@@ -711,6 +723,33 @@ function GetHoverForProperty(type: typedb.DBType | typedb.DBNamespace, prop: typ
             value: hover,
         },
     };
+}
+
+function GetPropertyInitializer(asmodule: scriptfiles.ASModule, offset: number, propName: string): string {
+    let statement = asmodule.getStatementAt(offset);
+    if (!statement || !statement.ast)
+        return null;
+
+    // The AST for a VariableDecl has an `expression` field for its initializer
+    let node = statement.ast;
+    if (node.type == scriptfiles.node_types.VariableDeclMulti) {
+        for (let child of node.children) {
+            if (child && child.name && child.name.value == propName) {
+                node = child;
+                break;
+            }
+        }
+    }
+
+    if (node.type != scriptfiles.node_types.VariableDecl)
+        return null;
+    if (!node.inline_assignment || !node.expression)
+        return null;
+
+    return asmodule.content.substring(
+        statement.start_offset + node.expression.start,
+        statement.start_offset + node.expression.end
+    ).trim();
 }
 
 function GetHoverForFunction(asmodule: scriptfiles.ASModule, offset: number, type: typedb.DBType | typedb.DBNamespace, func: typedb.DBMethod, isAccessor: boolean): Hover {
