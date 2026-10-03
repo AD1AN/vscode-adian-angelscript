@@ -683,7 +683,7 @@ function GetHoverForLocalVariable(scope : scriptfiles.ASScope, asvar : scriptfil
 function GetHoverForProperty(type: typedb.DBType | typedb.DBNamespace, prop: typedb.DBProperty): Hover | undefined {
     let hover = "";
     let prefix = "";
-    if (prop.containingType != type)
+    if (prop.containingType && prop.containingType != type)
         prefix = prop.containingType.name + "::";
 
     hover += FormatPropertyDocumentation(prop.documentation);
